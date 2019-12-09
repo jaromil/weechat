@@ -517,17 +517,13 @@ gui_key_flush (int paste)
 int
 gui_key_read_cb (const void *pointer, void *data, int fd)
 {
-    int ret, i, accept_paste, cancel_paste, text_added_to_buffer, pos;
+    int ret, i, pos;
     unsigned char buffer[4096];
 
     /* make C compiler happy */
     (void) pointer;
     (void) data;
     (void) fd;
-
-    accept_paste = 0;
-    cancel_paste = 0;
-    text_added_to_buffer = 0;
 
     ret = read (STDIN_FILENO, buffer, sizeof (buffer));
     if (ret == 0)
@@ -554,83 +550,12 @@ gui_key_read_cb (const void *pointer, void *data, int fd)
             || ((buffer[i] != '\r') && (buffer[i] != '\n'))
             || ((buffer[i - 1] != '\r') && (buffer[i - 1] != '\n')))
         {
-            if (gui_key_paste_pending && (buffer[i] == 25))
-            {
-                /* ctrl-Y: accept paste */
-                accept_paste = 1;
-            }
-            else if (gui_key_paste_pending && (buffer[i] == 14))
-            {
-                /* ctrl-N: cancel paste */
-                cancel_paste = 1;
-            }
-            else
-            {
-                gui_key_buffer_add (buffer[i]);
-                text_added_to_buffer = 1;
-            }
+	        gui_key_buffer_add (buffer[i]);
         }
     }
 
-    if (gui_key_paste_pending)
-    {
-        if (accept_paste)
-        {
-            /* user is OK for pasting text, let's paste! */
-            gui_key_paste_accept ();
-        }
-        else if (cancel_paste)
-        {
-            /* user doesn't want to paste text: clear whole buffer! */
-            gui_key_paste_cancel ();
-        }
-        else if (text_added_to_buffer)
-        {
-            /* new text received while asking for paste, update message */
-            gui_input_paste_pending_signal ();
-        }
-    }
-    else
-    {
-        if (!gui_key_paste_bracketed)
-        {
-            pos = gui_key_buffer_search (0, -1, GUI_KEY_BRACKETED_PASTE_START);
-            if (pos >= 0)
-            {
-                gui_key_buffer_remove (pos, GUI_KEY_BRACKETED_PASTE_LENGTH);
-                gui_key_paste_bracketed_start ();
-            }
-        }
-
-        if (!gui_key_paste_bracketed)
-            gui_key_paste_check (0);
-    }
-
-    gui_key_flush ((accept_paste) ? 1 : 0);
-
-    if (gui_key_paste_bracketed)
-    {
-        pos = gui_key_buffer_search (0, -1, GUI_KEY_BRACKETED_PASTE_END);
-        if (pos >= 0)
-        {
-            /* remove the code for end of bracketed paste (ESC[201~) */
-            gui_key_buffer_remove (pos, GUI_KEY_BRACKETED_PASTE_LENGTH);
-
-            /* remove final newline (if needed) */
-            gui_key_paste_remove_newline ();
-
-            /* replace tabs by spaces */
-            gui_key_paste_replace_tabs ();
-
-            /* stop bracketed mode */
-            gui_key_paste_bracketed_timer_remove ();
-            gui_key_paste_bracketed_stop ();
-
-            /* if paste confirmation not displayed, flush buffer now */
-            if (!gui_key_paste_pending)
-                gui_key_flush (1);
-        }
-    }
+    gui_key_paste_accept();
+    gui_key_flush (1);
 
     return WEECHAT_RC_OK;
 }
